@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0c10">
+<title>Orbit — Robot Console</title>
+<meta name="description" content="A standalone voice and USB control console for your ESP32 robot.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0a0c10;
+  --surface:rgba(255,255,255,.035);
+  --surface-2:rgba(255,255,255,.07);
+  --line:rgba(255,255,255,.09);
+  --line-2:rgba(255,255,255,.18);
+  --text:#f1f4ef;--muted:#8d959d;
+  --mint:#b5f37c;--mint-deep:#8ede5b;--mint-ink:#161f0d;
+  --cyan:#7de8d8;--amber:#f4cd74;--red:#ff9d98;
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);overscroll-behavior-y:contain;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:
+  radial-gradient(55% 45% at 18% -5%,rgba(181,243,124,.08),transparent 60%),
+  radial-gradient(45% 40% at 88% 8%,rgba(125,232,216,.07),transparent 60%),
+  radial-gradient(80% 55% at 50% 108%,rgba(125,232,216,.05),transparent 65%)}
+.app{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:0 clamp(16px,4vw,48px)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface-2);border-radius:11px;padding:11px 15px;transition:background .18s,border-color .18s,transform .12s,color .18s;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:hover:not(:disabled){background:rgba(255,255,255,.11);border-color:var(--line-2)}
+button:active:not(:disabled){transform:translateY(1px)}
+:focus-visible{outline:2px solid var(--mint);outline-offset:3px}
+svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.icon{display:grid;place-items:center;width:44px;height:44px;padding:0}
+.primary{background:linear-gradient(135deg,var(--mint),var(--mint-deep));color:var(--mint-ink);border:0;font-weight:700;box-shadow:0 8px 28px rgba(181,243,124,.28)}
+.primary:hover:not(:disabled){filter:brightness(1.08)}
+.quiet{background:transparent}
+code{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.08);padding:1px 5px;border-radius:5px}
+
+/* ---------- header ---------- */
+.header{height:88px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;font-size:23px;font-weight:800;letter-spacing:-.02em}
+.brand-mark{width:38px;height:38px;border:1px solid rgba(181,243,124,.55);border-radius:50%;display:grid;place-items:center;color:var(--mint);box-shadow:0 0 22px rgba(181,243,124,.18)}
+.brand-mark svg{width:24px;height:24px}
+.brand small{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.22em;border-left:1px solid var(--line);padding-left:14px;margin-left:8px;text-transform:uppercase}
+.header-actions{display:flex;align-items:center;gap:9px}
+.connect{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;border-radius:999px;padding:10px 16px}
+.dot{width:7px;height:7px;background:var(--muted);border-radius:50%;flex-shrink:0;display:inline-block}
+.dot.on{background:var(--mint);box-shadow:0 0 10px var(--mint)}
+
+/* ---------- workspace ---------- */
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) 330px;min-height:calc(100dvh - 140px)}
+.stage{display:flex;flex-direction:column;padding:26px 34px 26px 0;border-right:1px solid var(--line);min-width:0}
+.stage-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.24em;color:var(--muted);font-weight:600}
+.state-label{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--mint);background:rgba(181,243,124,.08);border:1px solid rgba(181,243,124,.22);border-radius:999px;padding:5px 12px}
+
+/* ---------- face ---------- */
+.face-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:280px;padding:18px 0}
+.face-card{position:relative;display:grid;place-items:center;padding:clamp(24px,6vw,44px) clamp(38px,9vw,96px);border-radius:28px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));box-shadow:inset 0 1px 0 rgba(255,255,255,.05);overflow:hidden;transition:border-color .3s,box-shadow .3s}
+.halo{position:absolute;left:50%;top:50%;width:104%;aspect-ratio:3.6/1;border:1px dashed rgba(181,243,124,.28);border-radius:50%;pointer-events:none;animation:halo 28s linear infinite}
+.halo::after{content:"";position:absolute;top:-4px;left:14%;width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 14px var(--mint)}
+.halo.two{width:78%;border-color:rgba(125,232,216,.15);animation-duration:46s;animation-direction:reverse}
+.halo.two::after{display:none}
+@keyframes halo{from{transform:translate(-50%,-50%) rotate(0)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+.face{border:0;background:transparent;display:flex;align-items:center;justify-content:center;gap:clamp(34px,8vw,64px);height:150px;padding:0;position:relative}
+.face:hover:not(:disabled){background:transparent;border:0}
+.eye{width:clamp(54px,12vw,92px);aspect-ratio:.78;border-radius:999px;background:radial-gradient(120% 120% at 32% 20%,#e6ffc4,var(--mint) 55%,var(--mint-deep));box-shadow:0 0 60px rgba(181,243,124,.22),inset 0 -10px 22px rgba(0,0,0,.14);transition:transform .35s,background .35s,box-shadow .35s}
+.mouth{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);width:34px;height:8px;border-radius:99px;background:var(--mint);opacity:.55;transition:.35s}
+.face.sleep .eye{transform:scaleY(.07);box-shadow:none}
+.face.sleep .mouth{opacity:0}
+.face.awake .eye{animation:blink 6.5s infinite}
+.face.thinking .eye{background:radial-gradient(120% 120% at 32% 20%,#ffe9b0,var(--amber) 60%,#d9a93e);box-shadow:0 0 50px rgba(244,205,116,.2);animation:think .9s ease-in-out infinite alternate}
+.face.listening .eye{transform:scaleY(1.08);background:radial-gradient(120% 120% at 32% 20%,#d8fff7,var(--cyan) 60%,#3fbfae);box-shadow:0 0 55px rgba(125,232,216,.25)}
+.face.speaking .eye{animation:speakEye .55s ease-in-out infinite alternate}
+.face.speaking .mouth{opacity:1;animation:mouth .45s ease-in-out infinite}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.08)}}
+@keyframes think{from{transform:scaleY(.6) translateX(-7px)}to{transform:scaleY(.6) translateX(7px)}}
+@keyframes speakEye{from{transform:scaleY(.82)}to{transform:scaleY(1.05)}}
+@keyframes mouth{0%,100%{transform:translateX(-50%) scaleX(.45)}50%{transform:translateX(-50%) scaleX(1.35)}}
+[data-face=listening] .face-card{border-color:rgba(125,232,216,.35);box-shadow:0 0 44px rgba(125,232,216,.1)}
+[data-face=speaking] .face-card{border-color:rgba(181,243,124,.35)}
+[data-face=thinking] .face-card{border-color:rgba(244,205,116,.3)}
+.wave{display:flex;gap:4px;height:18px;align-items:center}
+.wave i{width:3px;height:4px;border-radius:2px;background:var(--line-2);transition:background .3s}
+.wave i:nth-child(1){animation-delay:0s}.wave i:nth-child(2){animation-delay:.12s}.wave i:nth-child(3){animation-delay:.24s}
+.wave i:nth-child(4){animation-delay:.06s}.wave i:nth-child(5){animation-delay:.3s}.wave i:nth-child(6){animation-delay:.16s}.wave i:nth-child(7){animation-delay:.22s}
+[data-face=speaking] .wave i{background:var(--mint);animation:wv .8s ease-in-out infinite}
+[data-face=listening] .wave i{background:var(--cyan);animation:wv 1.15s ease-in-out infinite}
+@keyframes wv{0%,100%{height:4px}50%{height:16px}}
+
+/* ---------- response + dock ---------- */
+.response{text-align:center;display:flex;flex-direction:column;gap:10px;margin:6px 0 16px}
+#reply{font-size:clamp(19px,2.4vw,26px);font-weight:600;line-height:1.35;margin:0;overflow-wrap:anywhere}
+#heard{font-size:12.5px;color:var(--muted);margin:0;min-height:17px}
+.dock{display:flex;flex-direction:column;gap:9px;background:rgba(13,16,20,.72);border:1px solid var(--line);border-radius:18px;padding:10px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);margin-top:auto}
+.composer{display:flex;gap:8px}
+.composer input{min-width:0;flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:12px 14px;font-size:15px;transition:border-color .2s}
+.composer input:focus{border-color:rgba(181,243,124,.5);outline:none}
+.composer input::placeholder{color:var(--muted)}
+.composer .icon{width:46px;height:46px;border-radius:12px}
+.voice-bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#start{display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:600;border-radius:999px;padding:8px 14px}
+#start.live{color:var(--cyan);border-color:rgba(125,232,216,.45);background:rgba(125,232,216,.09)}
+.voice-status{font-size:11px;color:var(--muted);text-align:right;overflow-wrap:anywhere}
+#status[data-error=true]{color:var(--red)}
+
+/* ---------- sidebar ---------- */
+.tabs{display:none}
+.side{padding:26px 0 20px 32px;min-width:0}
+.panel{padding:24px 0 8px}
+.panel:first-child{padding-top:0}
+.panel+.panel{border-top:1px solid var(--line)}
+.section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.section-title h2{font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin:0;font-weight:700;color:var(--muted)}
+.section-title .icon{width:30px;height:30px;border-radius:9px}
+.section-title .icon svg{width:15px;height:15px}
+.device{display:flex;align-items:center;gap:12px;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:13px 14px;margin-bottom:20px}
+.device-symbol{width:42px;height:42px;border:1px solid rgba(181,243,124,.4);border-radius:11px;display:grid;place-items:center;color:var(--mint);background:rgba(181,243,124,.06);flex-shrink:0}
+.device strong{font-size:13px;font-weight:600;display:block}
+.device p{font-size:11.5px;color:var(--muted);margin:3px 0 0}
+.dpad{display:grid;grid-template-columns:repeat(3,58px);grid-template-rows:repeat(3,52px);gap:8px;justify-content:center;margin:4px auto 18px}
+.dpad button{display:grid;place-items:center;padding:0;border-radius:13px}
+.dpad button:active:not(:disabled){transform:scale(.93)}
+.pad-btn[data-dir=forward]{grid-area:1/2}
+.pad-btn[data-dir=left]{grid-area:2/1}
+.pad-btn[data-dir=right]{grid-area:2/3}
+.pad-btn[data-dir=backward]{grid-area:3/2}
+.pad-center{grid-area:2/2;display:grid;place-items:center;color:var(--muted);font-size:9.5px;letter-spacing:.14em}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px}
+.chips:empty{display:none}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;font-size:12.5px;font-weight:600}
+.chip svg{width:15px;height:15px}
+.step-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+.stepper{display:flex;gap:5px;align-items:center}
+.stepper button{width:30px;height:30px;padding:0;border-radius:9px;display:grid;place-items:center;font-weight:700}
+.stepper output{min-width:30px;text-align:center;font-weight:700;font-size:13px}
+.activity{list-style:none;margin:0;padding:0;min-height:80px;max-height:260px;overflow-y:auto;scrollbar-width:thin}
+.activity li{font-size:11.5px;line-height:1.55;padding:8px 0;border-bottom:1px solid var(--line);display:flex;gap:10px;overflow-wrap:anywhere}
+.activity li.empty{border:0;color:var(--muted)}
+.activity time{color:var(--muted);font-size:9.5px;font-family:var(--mono);padding-top:3px;white-space:nowrap}
+.chatlog .msg{padding:8px 12px;margin:6px 0;border-radius:14px;font-size:12.5px;line-height:1.45;max-width:92%;width:fit-content}
+.chatlog .msg.user{margin-left:auto;background:rgba(125,232,216,.1);border:1px solid rgba(125,232,216,.22)}
+.chatlog .msg.model{background:var(--surface);border:1px solid var(--line)}
+.meta{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:9px}
+.engine-row{display:flex;justify-content:space-between;font-size:11.5px;gap:12px}
+.engine-row span:first-child{color:var(--muted)}
+.engine-row span:last-child{color:var(--mint);text-align:right;overflow-wrap:anywhere}
+.footer{height:52px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase}
+.footer span:last-child{display:flex;align-items:center;gap:7px}
+
+/* ---------- dialog ---------- */
+dialog{background:#111419;color:var(--text);border:1px solid var(--line-2);border-radius:18px;padding:0;margin:auto;width:min(600px,calc(100vw - 24px));max-height:min(88dvh,820px);box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column}
+dialog:not([open]){display:none}
+dialog::backdrop{background:rgba(4,6,9,.72);backdrop-filter:blur(4px)}
+.dialog-head{display:flex;justify-content:space-between;align-items:center;padding:20px 22px 0}
+dialog h2{font-size:20px;margin:0;font-weight:800}
+.dialog-body{overflow-y:auto;padding:12px 22px 22px;scrollbar-width:thin}
+.set-title{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--mint);margin:26px 0 4px;font-weight:700;display:flex;align-items:center;gap:10px}
+.set-title::after{content:"";flex:1;height:1px;background:var(--line)}
+dialog label{display:block;font-size:12px;color:var(--muted);margin:16px 0 7px;font-weight:600}
+dialog input,dialog select,dialog textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.25);color:var(--text);font-size:13.5px}
+dialog textarea{resize:vertical;line-height:1.5}
+dialog input:focus,dialog select:focus,dialog textarea:focus{border-color:rgba(181,243,124,.5);outline:none}
+.mono{font-family:var(--mono);font-size:12px!important}
+.key-row{display:flex;gap:7px}
+.key-row input{min-width:0}
+.hint{font-size:11px;line-height:1.6;color:var(--muted);margin:8px 0 0}
+a{color:var(--cyan)}
+.check{display:flex;gap:9px;align-items:center;font-size:12.5px;font-weight:500;margin:14px 0 4px}
+.check input{width:16px;height:16px;accent-color:var(--mint)}
+#settings-status{font-size:12px;line-height:1.6;color:var(--amber);overflow-wrap:anywhere;margin:10px 0 0}
+.dialog-actions{display:flex;gap:8px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--line)}
+.cmd-row{display:grid;grid-template-columns:minmax(0,1fr) 58px minmax(0,1.5fr) 38px;gap:6px;margin-bottom:7px}
+.cmd-row .c-code{font-family:var(--mono);text-transform:uppercase;text-align:center}
+.cmd-row .c-del{width:38px;min-height:38px;height:100%;padding:0;border-radius:10px}
+.add-cmd{width:100%;font-size:12.5px;font-weight:600;padding:10px}
+.row-between{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* ---------- mobile ---------- */
+@media(max-width:900px){
+  .app{padding:0 14px 190px}
+  .header{height:66px}
+  .brand{font-size:20px;gap:10px}
+  .brand small{display:none}
+  .header-actions{gap:6px}
+  .header-actions .icon{width:40px;height:40px}
+  .connect{padding:9px 13px;font-size:11.5px}
+  .workspace{display:block;min-height:0}
+  .stage{padding:18px 0 8px;border-right:0}
+  .face{height:120px}
+  .face-wrap{min-height:0;padding:12px 0}
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:12px 0 4px;padding:6px;border:1px solid var(--line);border-radius:14px;background:rgba(13,16,20,.78);backdrop-filter:blur(12px);position:sticky;top:8px;z-index:20}
+  .tabs button{font-size:12.5px;font-weight:700;padding:9px 4px;border-radius:9px}
+  .tabs button.active{background:var(--mint);color:var(--mint-ink);border-color:transparent}
+  .side{padding:0 0 12px}
+  .panel{display:none;padding:18px 0 6px}
+  .panel.active{display:block;animation:fadeIn .25s ease}
+  .panel+.panel{border-top:0}
+  .dock{position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:40;margin:0}
+  body.kb .dock{bottom:calc(var(--kb,0px) + 10px)}
+  .activity{max-height:220px}
+  .voice-status{max-width:170px}
+}
+@media(max-width:900px) and (max-height:760px){
+  .face{height:106px}
+  .response{margin:2px 0 10px}
+}
+@media(max-width:480px){
+  .dpad{grid-template-columns:repeat(3,62px);grid-template-rows:repeat(3,56px)}
+  .composer input{font-size:16px}
+  #reply{font-size:19px}
+  .cmd-row{grid-template-columns:minmax(0,1fr) 54px 38px}
+  .cmd-row .c-alias{grid-column:1/-1}
+}
+@media(min-height:880px) and (min-width:901px){.face-wrap{min-height:380px}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(-35 12 12)"/><circle cx="12" cy="12" r="3"/></svg></span>
+      orbit<small>Robot console</small>
+    </div>
+    <div class="header-actions">
+      <button id="connect" class="connect quiet" type="button"><span class="dot" id="dot"></span><span id="connText">Connect ESP32</span></button>
+      <button class="icon quiet" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="#111419"/><circle cx="16" cy="17" r="3" fill="#111419"/></svg></button>
+      <button class="icon quiet" id="fs" type="button" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="stage">
+      <div class="stage-top">
+        <span class="eyebrow">Your little co-pilot</span>
+        <span class="state-label"><span class="dot" id="state-dot"></span><span id="state">Resting</span></span>
+      </div>
+      <div class="face-wrap">
+        <div class="face-card">
+          <span class="halo" aria-hidden="true"></span>
+          <span class="halo two" aria-hidden="true"></span>
+          <button id="face" class="face sleep" type="button" aria-label="Wake robot" title="Tap to wake or sleep">
+            <span class="eye"></span><span class="eye"></span><span class="mouth"></span>
+          </button>
+        </div>
+        <div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="response" aria-live="polite">
+        <p id="reply">Hello, human.</p>
+        <p id="heard">Ready when you are.</p>
+      </div>
+      <div class="dock">
+        <form id="composer" class="composer">
+          <input id="message" aria-label="Message robot" placeholder="Say hello, or give me a command…" maxlength="2000" autocomplete="off" autocapitalize="off" enterkeyhint="send">
+          <button class="icon primary" id="send" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+        </form>
+        <div class="voice-bar">
+          <button id="start" class="quiet" type="button"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8"/></svg><span id="listenText">Start listening</span></button>
+          <span class="voice-status" id="status">Microphone off</span>
+        </div>
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="Panels">
+      <button type="button" data-tab="move" class="active">Drive</button>
+      <button type="button" data-tab="log">Log</button>
+      <button type="button" data-tab="chat">Chat</button>
+    </nav>
+
+    <aside class="side">
+      <section class="panel active" data-panel="move">
+        <div class="section-title"><h2>Movement</h2></div>
+        <div class="device">
+          <div class="device-symbol"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/></svg></div>
+          <div><strong>ESP32 robot</strong><p data-conn>Not connected</p></div>
+        </div>
+        <div class="dpad" id="dpad"></div>
+        <div class="chips" id="chips"></div>
+        <div class="step-row">
+          <span>Units per move</span>
+          <div class="stepper"><button id="minus" type="button" aria-label="Fewer units">−</button><output id="units">1</output><button id="plus" type="button" aria-label="More units">+</button></div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="log">
+        <div class="section-title"><h2>Activity</h2><button id="clear" class="icon quiet" type="button" aria-label="Clear activity" title="Clear activity"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7"/></svg></button></div>
+        <ul id="log" class="activity" aria-live="polite"><li class="empty">All quiet. Let’s make a move.</li></ul>
+      </section>
+
+      <section class="panel" data-panel="chat">
+        <div class="section-title"><h2>Chat history</h2><button id="clearchat" class="icon quiet" type="button" aria-label="Clear chat history" title="Clear chat history (robot forgets)"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div>
+        <ul id="chatlog" class="activity chatlog"></ul>
+        <div class="meta">
+          <div class="engine-row"><span>Intelligence</span><span id="engine">Local commands</span></div>
+          <div class="engine-row"><span>Voice</span><span id="voice-engine">Cartesia</span></div>
+          <div class="engine-row"><span>Wake phrase</span><span id="wake-label">hey robot</span></div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="footer"><span>Orbit · Personal robotics</span><span><span class="dot on"></span>System ready</span></footer>
+</div>
+
+<dialog id="settings">
+  <div class="dialog-head"><h2>Settings</h2><button id="close-settings" class="icon quiet" type="button" aria-label="Close settings">✕</button></div>
+  <div class="dialog-body">
+    <h3 class="set-title">Brain</h3>
+    <label for="key">Gemini API key</label>
+    <div class="key-row"><input type="password" id="key" autocomplete="off" placeholder="Paste your own API key"><button id="show-key" class="quiet" type="button" aria-label="Show API key">Show</button></div>
+    <p class="hint">Sent only to Google. Keep this file private while a key is entered. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get a key ↗</a></p>
+    <label class="check"><input id="remember" type="checkbox">Remember key on this device</label>
+    <label for="model">Gemini model</label>
+    <select id="model"><option value="auto">Auto — discover available Flash models</option></select>
+    <button id="test-key" class="quiet" type="button" style="margin-top:10px;font-size:12px">Check key &amp; models</button>
+    <p id="settings-status" aria-live="polite"></p>
+    <label for="sysprompt">System prompt (robot personality)</label>
+    <textarea id="sysprompt" rows="4"></textarea>
+    <p class="hint">Movement safety rules are always added automatically.</p>
+
+    <h3 class="set-title">Voice</h3>
+    <label class="check"><input id="voice" type="checkbox" checked>Speak replies out loud</label>
+    <div class="row-between">
+      <span class="hint">Cartesia Sonic, with automatic fallback to your browser’s voice.</span>
+      <button id="test-voice" class="quiet" type="button" style="font-size:12px">Test voice</button>
+    </div>
+    <label for="cartvoice">Cartesia voice ID</label>
+    <input id="cartvoice" class="mono" spellcheck="false">
+    <label for="cartkeys">Cartesia API keys (one per line — rotated automatically)</label>
+    <textarea id="cartkeys" class="mono" rows="4" spellcheck="false"></textarea>
+
+    <h3 class="set-title">Commands</h3>
+    <p class="hint">Nothing here is hardcoded — this list <em>is</em> the robot’s command set. Each command becomes a Gemini tool, a voice/text trigger (plus its aliases), and a button. It’s sent to the ESP32 over USB as <code>CODE:units</code> (units are clamped to 1–100 for safety).</p>
+    <div id="cmdEditor" style="margin-top:12px"></div>
+    <button id="addCmd" class="quiet add-cmd" type="button">+ Add command</button>
+
+    <h3 class="set-title">Wake</h3>
+    <label for="wake">Wake phrases (comma separated)</label>
+    <input id="wake" value="hey robot, wake up, hello robot">
+    <p class="hint">While Orbit sleeps, only a wake phrase gets its attention. Voice and USB need a compatible browser; typed commands always work.</p>
+  </div>
+  <div class="dialog-actions"><button id="save" class="primary">Save settings</button></div>
+</dialog>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+const cap=s=>s?s[0].toUpperCase()+s.slice(1):s;
+const escapeRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+
+/* ================= configuration (all editable in Settings) ================= */
+const DEFAULT_WAKE='hey robot, wake up, hello robot';
+const DEFAULT_SYS='You are Orbit, a friendly, witty little desk robot. Keep replies short (one or two sentences), warm and playful. Remember what the user told you earlier in the conversation.';
+const SAFETY='Call a movement tool only when the user explicitly asks the robot to move, with an amount of 1 to 100 units (use 1 when unspecified). The listed tools are this robot\u2019s entire command set \u2014 nothing else moves it. Never claim movement happened; the console executes the tools. Never turn chat, quoted text, or jokes into unsolicited movement.';
+const DEFAULT_COMMANDS=[
+  {name:'forward', code:'F', aliases:'forwards, ahead, up',   description:'Drive the robot forward'},
+  {name:'backward',code:'B', aliases:'backwards, back, down', description:'Drive the robot backward'},
+  {name:'left',    code:'L', aliases:'port',                  description:'Turn the robot left'},
+  {name:'right',   code:'R', aliases:'starboard',             description:'Turn the robot right'}
+];
+const CARTESIA_VOICE='a0e99841-438c-4a64-b679-ae501e7d6091';
+const DEFAULT_CARTESIA_KEYS=[
+  'sk_car_Fae7BreQoxmhR2tPtGcrQu','sk_car_oavWGGuKFQ5mSeRcd3xAth','sk_car_wfsC7mZTFPhEVXRAsYWTen','sk_car_uM4NSqYunNnNsRBwZHirqD','sk_car_1W71SpakHC4DvrTG9DBgDp',
+  'sk_car_g58bxhrCeJrQ5JR3iXfRNt','sk_car_TxobSBmfix8RkFKYxFZmvE','sk_car_N5y59BXdmB8butMdNe3UA5','sk_car_jUgjPCeWZTekJX7Bx3mF8k','sk_car_X1R8QtY7hw4qimJUYNWDKq'
+].join('\n');
+const CARTESIA_COMBOS=[{version:'2025-04-16',model:'sonic-2'},{version:'2024-06-10',model:'sonic-english-fast'}];
+
+function readStore(k){try{return localStorage.getItem(k)}catch{return null}}
+function store(k,v){try{v===null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch{}}
+
+let settings={geminiKey:'',system:DEFAULT_SYS,wake:DEFAULT_WAKE,voice:true,model:'auto',remember:false,
+              cartesiaKeys:DEFAULT_CARTESIA_KEYS,cartesiaVoice:CARTESIA_VOICE,commands:DEFAULT_COMMANDS};
+try{
+  const saved=JSON.parse(readStore('orbit-settings')||'{}');
+  settings={...settings,...saved};
+  if(typeof settings.cartesiaKeys!=='string'||!settings.cartesiaKeys.trim())settings.cartesiaKeys=DEFAULT_CARTESIA_KEYS;
+  if(!settings.cartesiaVoice)settings.cartesiaVoice=CARTESIA_VOICE;
+  if(!Array.isArray(settings.commands)||!settings.commands.length)settings.commands=DEFAULT_COMMANDS;
+  settings.geminiKey=readStore('orbit-key')||'';
+}catch{}
+let commands=settings.commands;
+
+/* ================= chat history ================= */
+let chat=[];try{chat=JSON.parse(localStorage.getItem('orbit-chat')||'[]')}catch{}
+function addChat(u,m){chat.push({role:'user',text:u},{role:'model',text:m});chat=chat.slice(-40);
+  try{localStorage.setItem('orbit-chat',JSON.stringify(chat))}catch{}renderChat()}
+function renderChat(){const el=$('chatlog');el.replaceChildren();
+  if(!chat.length){const li=document.createElement('li');li.className='empty';li.textContent='No conversation yet.';el.append(li);return}
+  for(const m of chat){const li=document.createElement('li');li.className='msg '+m.role;li.textContent=m.text;el.append(li)}
+  el.scrollTop=el.scrollHeight}
+
+/* ================= state ================= */
+let awake=false,busy=false,port=null,writer=null,rec=null,listening=false,speaking=false,
+    sleepTimer=null,restartTimer=null,units=1,models=[],cooling={},micStream=null,restarts=0,lastStart=0;
+
+function log(text){const ul=$('log');const empty=ul.querySelector('.empty');if(empty)empty.remove();
+  const li=document.createElement('li'),time=document.createElement('time'),span=document.createElement('span');
+  time.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});span.textContent=text;
+  li.append(time,span);ul.prepend(li);while(ul.children.length>14)ul.lastChild.remove()}
+function status(text,error=false){$('status').textContent=text;$('status').dataset.error=String(error)}
+const FACE_TEXT={sleep:'Resting',awake:'Awake',thinking:'Thinking',speaking:'Speaking',listening:'Listening'};
+function setFace(mode){$('face').className='face '+mode;document.body.dataset.face=mode;
+  $('face').setAttribute('aria-label',awake?'Put robot to sleep':'Wake robot');
+  $('state').textContent=FACE_TEXT[mode]||mode;$('state-dot').classList.toggle('on',mode!=='sleep')}
+function refreshFace(){setFace(busy?'thinking':speaking?'speaking':listening?'listening':awake?'awake':'sleep')}
+function bumpSleep(){clearTimeout(sleepTimer);if(awake&&!busy&&!speaking)sleepTimer=setTimeout(sleep,20000)}
+function wake(){awake=true;refreshFace();$('reply').textContent='I\u2019m here. What\u2019s the plan?';bumpSleep()}
+function sleep(){awake=false;clearTimeout(sleepTimer);stopAudio();speaking=false;refreshFace();
+  $('reply').textContent='A little recharge.';$('heard').textContent='Waiting for a wake phrase.';
+  if(listening)status('Listening for a wake phrase')}
+
+/* ================= Cartesia TTS with key rotation ================= */
+let audioEl=null,speakGen=0,cartKeyIdx=0,cartCombo=null,cartesiaLogged=false;
+const cartCooldown=new Map();
+function cartesiaKeys(){return (settings.cartesiaKeys||'').split(/[\s,]+/).map(k=>k.trim()).filter(k=>k.length>8)}
+function stopAudio(){speakGen++;try{if(audioEl)audioEl.pause()}catch{};audioEl=null;
+  try{if(window.speechSynthesis)window.speechSynthesis.cancel()}catch{}}
+async function cartesiaFetch(key,combo,text){
+  const body=JSON.stringify({model_id:combo.model,transcript:text,
+    voice:{mode:'id',id:settings.cartesiaVoice||CARTESIA_VOICE},
+    output_format:{container:'mp3',sample_rate:'44100',bitrate:'128000'},language:'en'});
+  const headers={'X-API-Key':key,'Cartesia-Version':combo.version,'Content-Type':'application/json'};
+  const go=async url=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),12000);
+    try{return await fetch(url,{method:'POST',headers,body,signal:c.signal})}finally{clearTimeout(t)}};
+  let res;
+  try{res=await go('https://api.cartesia.ai/tts/batch')}catch{throw{network:true}}
+  if(res.ok){const json=await res.json().catch(()=>null);
+    if(json&&json.audio)return 'data:audio/mpeg;base64,'+json.audio;
+    throw{status:res.status,message:'Empty audio'}}
+  if(res.status===404){ // some accounts expose the raw-bytes endpoint instead
+    try{const r2=await go('https://api.cartesia.ai/tts/bytes');
+      if(r2.ok){const blob=await r2.blob();return URL.createObjectURL(blob)}}catch{}
+  }
+  const err={status:res.status};
+  try{const j=await res.json();err.message=(j&&(j.error&&j.error.message||j.message))||''}catch{}
+  throw err;
+}
+async function cartesiaTTS(text){
+  const keys=cartesiaKeys();if(!keys.length)return null;
+  const now=Date.now();
+  const combos=cartCombo?[cartCombo].concat(CARTESIA_COMBOS.filter(c=>c!==cartCombo)):CARTESIA_COMBOS;
+  let lastErr=null;
+  for(let i=0;i<Math.min(keys.length,4);i++){
+    const key=keys[cartKeyIdx];cartKeyIdx=(cartKeyIdx+1)%keys.length;   // rotate on every request
+    if((cartCooldown.get(key)||0)>now)continue;
+    for(const combo of combos){
+      try{const url=await cartesiaFetch(key,combo,text);cartCombo=combo;return url}
+      catch(e){lastErr=e;
+        if(e.network)break;                                    // try next key
+        if(e.status===401||e.status===403){cartCooldown.set(key,now+36e5);break} // dead key: skip 1h
+        if(e.status===429){cartCooldown.set(key,now+6e4);break}                // rate limited: skip 1min
+        if(e.status===400||e.status===404)continue;            // wrong model/version: try other combo
+        break;                                                 // anything else: next key
+      }
+    }
+  }
+  console.warn('Cartesia TTS unavailable:',lastErr);
+  return null;
+}
+function setVoiceEngine(name){$('voice-engine').textContent=name}
+async function speak(text,force){
+  if(!(settings.voice||force)||!text){bumpSleep();return}
+  stopAudio();
+  const gen=speakGen;
+  clearTimeout(sleepTimer);speaking=true;refreshFace();
+  const clean=String(text).replace(/[*_`~#]/g,'').slice(0,600);
+  try{
+    const url=await cartesiaTTS(clean);
+    if(gen!==speakGen)return;
+    if(url){
+      audioEl=new Audio(url);
+      audioEl.onended=audioEl.onerror=()=>{if(gen===speakGen){speaking=false;refreshFace();bumpSleep()}};
+      await audioEl.play();
+      setVoiceEngine('Cartesia · '+(cartCombo?cartCombo.model:'sonic'));
+      if(!cartesiaLogged){cartesiaLogged=true;log('Cartesia voice ready')}
+      return;
+    }
+  }catch(e){}
+  if(gen!==speakGen)return;
+  if(window.speechSynthesis){                                  // graceful fallback
+    setVoiceEngine('Browser fallback');
+    const u=new SpeechSynthesisUtterance(clean);u.rate=1.03;
+    u.onend=u.onerror=()=>{if(gen===speakGen){speaking=false;refreshFace();bumpSleep()}};
+    speechSynthesis.cancel();speechSynthesis.speak(u);return;
+  }
+  speaking=false;refreshFace();bumpSleep();
+}
+
+/* ================= dynamic command set ================= */
+let MATCH={map:new Map(),re:null},TOOL_INDEX={};
+function toolNameOf(c){let n=String(c.name).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+  if(!n||/^[0-9]/.test(n))n='cmd_'+n;return n}
+function rebuildMatchers(){
+  const map=new Map();
+  for(const c of commands){
+    const n=String(c.name).toLowerCase().trim();
+    if(n&&!map.has(n))map.set(n,c.name);
+    for(const a of String(c.aliases||'').split(',')){
+      const t=a.toLowerCase().trim();
+      if(t&&!map.has(t))map.set(t,c.name);
+    }
+  }
+  const alts=[...map.keys()].sort((a,b)=>b.length-a.length).map(escapeRe).join('|');
+  MATCH={map,re:alts?new RegExp('^(?:(?:please|can you|could you|hey orbit|ok orbit)\\s+)?(?:(?:go|move|drive|turn|roll)\\s+)?(?:'+alts+')(?:\\s+(?:by|for))?\\s*(\\d+)?\\s*(?:steps?|units?|times?)?\\s*(?:please)?\\s*$','i'):null};
+  TOOL_INDEX={};commands.forEach(c=>TOOL_INDEX[toolNameOf(c)]=c);
+}
+function localCommand(text){
+  if(!MATCH.re)return null;
+  const cleaned=text.toLowerCase().replace(/[.!,?]/g,'').trim();
+  const m=MATCH.re.exec(cleaned);
+  if(!m)return null;
+  const name=MATCH.map.get(m[1].toLowerCase());
+  const amount=Number(m[2]||1);
+  if(!name)return null;
+  if(amount<1||amount>100)throw new Error('Choose between 1 and 100 movement units.');
+  return{reply:'',calls:[{name,amount}]};
+}
+function findCommand(name){return commands.find(c=>c.name===name)}
+async function sendCommand(name,amount){
+  if(!writer)throw new Error('Connect your ESP32 before moving.');
+  const cmd=findCommand(name);
+  if(!cmd)throw new Error('Unknown command \u201C'+name+'\u201D. Add it in Settings.');
+  const number=Number(amount);
+  if(!Number.isFinite(number)||number<1||number>100)throw new Error('Movement amount must be between 1 and 100.');
+  const safe=Math.round(number);
+  try{await writer.write(new TextEncoder().encode(cmd.code+':'+safe+'\n'));
+    log(cmd.name+' · '+safe+' unit'+(safe===1?'':'s'))}
+  catch(e){await disconnect();throw new Error('USB write failed. Reconnect your ESP32.')}
+}
+function toolDeclarations(){
+  return commands.map(c=>({name:toolNameOf(c),
+    description:c.description||('Run the \u201C'+c.name+'\u201D action on the robot'),
+    parameters:{type:'OBJECT',properties:{amount:{type:'INTEGER',description:'Movement units from 1 to 100',minimum:1,maximum:100}},required:['amount']}}));
+}
+
+/* ================= D-pad & chips (rendered from the command set) ================= */
+const ICONS={
+  forward:'<svg viewBox="0 0 24 24"><path d="m6 14 6-6 6 6"/></svg>',
+  backward:'<svg viewBox="0 0 24 24"><path d="m6 10 6 6 6-6"/></svg>',
+  left:'<svg viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></svg>',
+  right:'<svg viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></svg>',
+  bolt:'<svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>'
+};
+const DIRECTION_WORDS={forward:['forward','forwards','up','ahead'],backward:['backward','backwards','back','down','reverse'],left:['left','port'],right:['right','starboard']};
+function directionOf(c){
+  const tokens=[c.name].concat(String(c.aliases||'').split(',')).map(t=>t.trim().toLowerCase()).filter(Boolean);
+  for(const dir in DIRECTION_WORDS)if(tokens.some(t=>DIRECTION_WORDS[dir].indexOf(t)>=0))return dir;
+  return null;
+}
+async function runCommand(c){
+  if(busy)return;busy=true;
+  try{await sendCommand(c.name,units);
+    $('reply').textContent=cap(c.name)+' · '+units+' unit'+(units===1?'':'s');status('Command sent')}
+  catch(e){status(e.message,true)}
+  finally{busy=false;refreshFace();bumpSleep()}
+}
+function renderPad(){
+  const pad=$('dpad'),chips=$('chips');pad.replaceChildren();chips.replaceChildren();
+  const slots={forward:null,backward:null,left:null,right:null},extras=[];
+  for(const c of commands){const dir=directionOf(c);if(dir&&!slots[dir])slots[dir]=c;else extras.push(c)}
+  for(const dir of ['forward','left','right','backward']){
+    const c=slots[dir],b=document.createElement('button');
+    b.type='button';b.className='pad-btn';b.dataset.dir=dir;b.innerHTML=ICONS[dir];
+    if(c){b.dataset.cmd=c.name;b.title=c.name;b.setAttribute('aria-label','Move '+c.name);b.onclick=()=>runCommand(c)}
+    else{b.disabled=true;b.title='Add a \u201C'+dir+'\u201D command in Settings';b.setAttribute('aria-label',dir+' (not configured)')}
+    pad.append(b);
+  }
+  const center=document.createElement('span');center.className='pad-center';center.textContent='USB';pad.append(center);
+  for(const c of extras){
+    const chip=document.createElement('button');chip.type='button';chip.className='chip';chip.dataset.cmd=c.name;
+    chip.innerHTML=ICONS.bolt;const label=document.createElement('span');label.textContent=c.name;chip.append(label);
+    chip.onclick=()=>runCommand(c);chips.append(chip);
+  }
+  updateDevice();
+}
+
+/* ================= settings dialog ================= */
+function cmdRow(c){
+  const row=document.createElement('div');row.className='cmd-row';
+  const name=document.createElement('input');name.className='c-name';name.maxLength=24;name.placeholder='name · forward';name.value=c.name||'';
+  const code=document.createElement('input');code.className='c-code';code.maxLength=8;code.placeholder='F';code.value=c.code||'';code.setAttribute('aria-label','Serial code');
+  const alias=document.createElement('input');alias.className='c-alias';alias.maxLength=90;alias.placeholder='aliases · ahead, up';alias.value=c.aliases||'';
+  const del=document.createElement('button');del.type='button';del.className='c-del icon quiet';del.textContent='\u2715';del.title='Remove command';del.setAttribute('aria-label','Remove command');
+  del.onclick=()=>row.remove();
+  row.append(name,code,alias,del);return row;
+}
+function fillCmdEditor(){const ed=$('cmdEditor');ed.replaceChildren();commands.forEach(c=>ed.append(cmdRow(c)))}
+ $('addCmd').onclick=()=>{const ed=$('cmdEditor');ed.append(cmdRow({}));ed.lastChild.querySelector('.c-name').focus()};
+
+function syncSettings(){
+  $('key').value=settings.geminiKey;
+  $('wake').value=settings.wake;
+  $('sysprompt').value=settings.system||DEFAULT_SYS;
+  $('voice').checked=settings.voice;
+  $('remember').checked=settings.remember;
+  $('cartkeys').value=settings.cartesiaKeys;
+  $('cartvoice').value=settings.cartesiaVoice||CARTESIA_VOICE;
+  $('wake-label').textContent=(settings.wake.split(',')[0]||'hey robot').trim();
+  $('engine').textContent=settings.geminiKey?'Gemini · ready':'Local commands';
+  if(settings.model!=='auto'&&!Array.from($('model').options).some(o=>o.value===settings.model))$('model').add(new Option(settings.model,settings.model));
+  $('model').value=settings.model;
+  fillCmdEditor();
+}
+ $('save').onclick=()=>{
+  const geminiKey=$('key').value.trim();
+  if(geminiKey!==settings.geminiKey)models=[];
+  const prev=new Map(commands.map(c=>[c.name,c]));
+  const rows=[...$('cmdEditor').querySelectorAll('.cmd-row')].map(r=>({
+    name:r.querySelector('.c-name').value.trim().toLowerCase().replace(/\s+/g,' '),
+    code:r.querySelector('.c-code').value.trim(),
+    aliases:r.querySelector('.c-alias').value.trim()
+  })).filter(r=>r.name&&r.code);
+  const seen=new Set();
+  commands=rows.filter(r=>{if(seen.has(r.name))return false;seen.add(r.name);return true})
+               .map(r=>({name:r.name,code:r.code,aliases:r.aliases,description:(prev.get(r.name)||{}).description}));
+  settings.commands=commands;
+  settings.geminiKey=geminiKey;
+  settings.system=$('sysprompt').value.trim()||DEFAULT_SYS;
+  settings.wake=$('wake').value.trim()||DEFAULT_WAKE;
+  settings.voice=$('voice').checked;
+  settings.model=$('model').value;
+  settings.remember=$('remember').checked;
+  settings.cartesiaKeys=$('cartkeys').value.trim()||DEFAULT_CARTESIA_KEYS;
+  settings.cartesiaVoice=$('cartvoice').value.trim()||CARTESIA_VOICE;
+  const{geminiKey:unused,...safe}=settings;
+  store('orbit-settings',JSON.stringify(safe));
+  store('orbit-key',settings.remember?geminiKey:null);
+  syncSettings();rebuildMatchers();renderPad();
+  $('settings').close();log('Settings updated');
+};
+ $('test-voice').onclick=async()=>{
+  const btn=$('test-voice');btn.disabled=true;
+  const keepKeys=settings.cartesiaKeys,keepVoice=settings.voice,keepId=settings.cartesiaVoice;
+  settings.cartesiaKeys=$('cartkeys').value.trim()||DEFAULT_CARTESIA_KEYS;
+  settings.cartesiaVoice=$('cartvoice').value.trim()||CARTESIA_VOICE;
+  settings.voice=true;
+  status('Testing Cartesia voice\u2026');
+  await speak('Hello! Orbit online. All systems go.',true);
+  settings.cartesiaKeys=keepKeys;settings.voice=keepVoice;settings.cartesiaVoice=keepId;
+  setTimeout(()=>btn.disabled=false,1500);
+};
+
+/* ================= simple controls ================= */
+ $('face').onclick=()=>{if(busy)return;awake?sleep():wake()};
+ $('settingsBtn').onclick=()=>$('settings').showModal();
+ $('close-settings').onclick=()=>$('settings').close();
+ $('show-key').onclick=()=>{const hidden=$('key').type==='password';$('key').type=hidden?'text':'password';
+  $('show-key').textContent=hidden?'Hide':'Show';$('show-key').setAttribute('aria-label',hidden?'Hide API key':'Show API key')};
+ $('fs').onclick=async()=>{try{
+  if(document.fullscreenElement)await document.exitFullscreen();
+  else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();
+  else status('Fullscreen is unavailable',true)
+}catch{status('Fullscreen was blocked by your browser',true)}};
+ $('plus').onclick=()=>{units=Math.min(100,units+1);$('units').textContent=units};
+ $('minus').onclick=()=>{units=Math.max(1,units-1);$('units').textContent=units};
+ $('clear').onclick=()=>{$('log').replaceChildren();const li=document.createElement('li');li.className='empty';li.textContent='All quiet.';$('log').append(li)};
+ $('clearchat').onclick=()=>{chat=[];try{localStorage.removeItem('orbit-chat')}catch{};renderChat()};
+
+/* mobile tabs */
+document.querySelectorAll('.tabs button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===b.dataset.tab));
+  };
+});
+/* keep the composer above the on-screen keyboard (iOS) */
+if(window.visualViewport){
+  const vv=window.visualViewport;
+  const fit=()=>{const kb=window.innerHeight-vv.height;
+    if(kb>120){document.documentElement.style.setProperty('--kb',kb+'px');document.body.classList.add('kb')}
+    else document.body.classList.remove('kb')};
+  vv.addEventListener('resize',fit);vv.addEventListener('scroll',fit);
+}
+
+/* ================= USB serial ================= */
+function updateDevice(){
+  const connected=!!writer;
+  $('dot').classList.toggle('on',connected);
+  $('connText').textContent=connected?'Disconnect':'Connect ESP32';
+  document.querySelectorAll('[data-conn]').forEach(el=>el.textContent=connected?'Connected · 115200 baud':'Not connected');
+  document.querySelectorAll('[data-cmd]').forEach(b=>{if(b.dataset.cmd)b.disabled=!connected});
+}
+async function disconnect(){if(writer){try{writer.releaseLock()}catch{};writer=null}
+  if(port){try{await port.close()}catch{};port=null}updateDevice()}
+if(!('serial' in navigator)){
+  $('connect').disabled=true;$('connText').textContent='USB unavailable';
+  $('connect').title='USB serial needs desktop Chrome or Edge \u2014 voice and typing still work';
+  document.querySelectorAll('[data-conn]').forEach(el=>el.textContent='USB needs desktop Chrome / Edge');
+}else{
+  navigator.serial.addEventListener('disconnect',()=>{disconnect();log('USB disconnected')});
+}
+ $('connect').onclick=async()=>{
+  if(writer){await disconnect();log('ESP32 disconnected');return}
+  $('connect').disabled=true;
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    if(!port.writable)throw new Error('Device has no writable serial stream');
+    writer=port.writable.getWriter();
+    updateDevice();log('ESP32 connected');status('USB ready');
+  }catch(e){
+    await disconnect();
+    if(e&&e.name!=='NotFoundError'){status('USB connection failed. Close other serial monitors and try again.',true);log('USB connection failed')}
+  }finally{$('connect').disabled=false}
+};
+
+/* ================= Gemini ================= */
+function apiError(code,json){const reason=json&&json.error&&json.error.message||'';
+  if(code===400&&/key/i.test(reason))return'Invalid API key. Replace it in Settings.';
+  if(code===401||code===403)return'Key rejected. Check your Gemini key, API restrictions, and access in Google AI Studio.';
+  if(code===404)return'This model is unavailable. Choose Auto in Settings and check your models.';
+  if(code===429)return'Gemini quota reached. Check your usage or billing in Google AI Studio, or try later.';
+  if([500,502,503,504].includes(code))return'Google is temporarily unavailable after retries. Local movement commands still work.';
+  return'Google returned '+code+': '+(reason.slice(0,220)||'Request failed.')}
+async function request(path,key,body,retries=2){
+  for(let attempt=0;attempt<=retries;attempt++){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+    let res,json;
+    try{
+      res=await fetch('https://generativelanguage.googleapis.com/v1beta/'+path,{
+        method:body?'POST':'GET',
+        headers:{'x-goog-api-key':key,...(body?{'Content-Type':'application/json'}:{})},
+        body:body?JSON.stringify(body):undefined,signal:controller.signal});
+      json=await res.json();
+    }catch(e){
+      clearTimeout(timer);
+      if(attempt<retries){status('Connection interrupted · retry '+(attempt+1)+'/'+retries);await delay(1000*2**attempt);continue}
+      throw new Error(e.name==='AbortError'?'Google timed out. Check your connection and try again.':'Could not reach Google. Check your internet connection.')
+    }finally{clearTimeout(timer)}
+    if(res.ok)return json;
+    const transient=[429,500,502,503,504].includes(res.status);
+    if(transient&&attempt<retries){
+      status('Google is retrying · '+(attempt+1)+'/'+retries);
+      const header=Number(res.headers.get('retry-after'));
+      await delay(Math.min(5000,header>0?header*1000:1000*2**attempt)+Math.random()*250);continue}
+    const error=new Error(apiError(res.status,json));error.code=res.status;throw error;
+  }
+}
+async function discover(key){
+  let all=[],pageToken='';
+  do{const result=await request('models?pageSize=100'+(pageToken?'&pageToken='+encodeURIComponent(pageToken):''),key);
+    all.push(...(result.models||[]));pageToken=result.nextPageToken||''}while(pageToken);
+  const eligible=all.filter(m=>m.supportedGenerationMethods&&m.supportedGenerationMethods.includes('generateContent')
+    &&/gemini/i.test(m.name)&&!/image|vision|tts|live|audio|embedding|robotics|computer-use|deep-research/i.test(m.name));
+  eligible.sort((a,b)=>score(b.name)-score(a.name)||b.name.localeCompare(a.name,undefined,{numeric:true}));
+  if(!eligible.length)throw new Error('No text-generation models are available for this key.');
+  return eligible.map(m=>({id:m.name.replace(/^models\//,''),label:m.displayName||m.name.replace(/^models\//,'')}))
+}
+function score(name){return(/flash/.test(name)?100:0)+(/lite/.test(name)?20:0)+(/preview|exp/.test(name)?-40:0)+(parseFloat((name.match(/gemini-(\d+(?:\.\d+)?)/)||[0,0])[1])*3)}
+function fillModels(list){const selected=$('model').value;
+  $('model').replaceChildren(new Option('Auto — best available Flash','auto'));
+  list.forEach(m=>$('model').add(new Option(m.label,m.id)));
+  if(list.some(m=>m.id===selected))$('model').value=selected}
+ $('test-key').onclick=async()=>{
+  const key=$('key').value.trim();
+  if(!key){$('settings-status').textContent='Enter your Gemini API key first.';return}
+  $('test-key').disabled=true;$('settings-status').textContent='Checking Google\u2026';
+  try{const available=await discover(key);fillModels(available);
+    if(key===settings.geminiKey)models=available;
+    $('settings-status').textContent='Key accepted · '+available.length+' models available. Auto selects '+available[0].label+'.'}
+  catch(e){$('settings-status').textContent=e.message}
+  finally{$('test-key').disabled=false}
+};
+async function askGemini(text){
+  if(!settings.geminiKey)throw new Error('Add your Gemini API key in Settings to chat. Movement commands work without it.');
+  if(!models.length)models=await discover(settings.geminiKey);
+  const ids=models.map(m=>m.id),good=readStore('orbit-good-model');
+  let choices=settings.model==='auto'?[good,...ids]:[settings.model,good,...ids];
+  choices=[...new Set(choices.filter(Boolean))].filter(id=>!cooling[id]||cooling[id]<Date.now()).slice(0,6);
+  if(!choices.length)choices=ids.slice(0,3);
+  let last;
+  for(let i=0;i<choices.length;i++){
+    const model=choices[i];
+    try{
+      $('engine').textContent=model;
+      status(i?'Trying '+model+'\u2026':'Thinking\u2026');
+      const body={systemInstruction:{parts:[{text:(settings.system||DEFAULT_SYS)+'\n\n'+SAFETY}]},
+        contents:[...chat.slice(-20).map(m=>({role:m.role,parts:[{text:m.text}]})),{role:'user',parts:[{text}]}],
+        generationConfig:{maxOutputTokens:512}};
+      if(commands.length)body.tools=[{functionDeclarations:toolDeclarations()}];
+      const json=await request('models/'+encodeURIComponent(model)+':generateContent',settings.geminiKey,body,1);
+      store('orbit-good-model',model);
+      const parts=(json.candidates&&json.candidates[0]&&json.candidates[0].content&&json.candidates[0].content.parts)||[];
+      if(!parts.length)throw new Error(json.promptFeedback&&json.promptFeedback.blockReason?'Google blocked this request. Try rephrasing it.':'Google returned no reply. Try a shorter request.');
+      let calls=[],reply='';
+      for(const p of parts){
+        if(p.thought)continue;
+        if(p.functionCall){
+          const cmd=TOOL_INDEX[p.functionCall.name];
+          const amount=Number(p.functionCall.args&&p.functionCall.args.amount);
+          if(!cmd||!Number.isFinite(amount)||amount<1||amount>100)throw new Error('Google returned an invalid movement. Nothing was sent.');
+          calls.push({name:cmd.name,amount:Math.round(amount)});
+        }else if(p.text)reply+=p.text;
+      }
+      const out={reply:reply.trim()||(calls.length?'On it.':'Please try that again.'),calls};
+      addChat(text,calls.length?out.reply+' [moved: '+calls.map(c=>c.name+' '+c.amount).join(', ')+']':out.reply);
+      return out;
+    }catch(e){
+      last=e;
+      if([404,429,500,502,503,504].includes(e.code)){
+        cooling[model]=Date.now()+(e.code===404?36e5:60000);
+        if(good===model)store('orbit-good-model',null);
+        if(i+1<choices.length){log(model+' busy — switching model');continue}
+      }
+      throw e;
+    }
+  }
+  throw last;
+}
+
+/* ================= conversation handling ================= */
+function smallTalk(text){
+  const t=text.toLowerCase().replace(/[.!?,]/g,'').trim();
+  const r=x=>({reply:x,calls:[]});
+  if(/^(hi|hello|hey|yo|hey robot|hello robot|wake up)( there| orbit| robot)?$/.test(t))return r('Hi! I\u2019m awake and ready.');
+  if(/^(what is|whats) your name$|^who are you$/.test(t))return r('I\u2019m Orbit, your little robot.');
+  if(/^how are you( doing)?$/.test(t))return r('All systems go!');
+  if(/^(what time is it|whats the time|time)$/.test(t))return r('It\u2019s '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+'.');
+  if(/^(thanks|thank you|thank you robot)$/.test(t))return r('You\u2019re welcome!');
+  return null;
+}
+async function handleCommand(text){
+  text=text.trim();if(!text||busy)return;
+  if(/^(?:go to sleep|sleep now|good ?night|sleep)[.!]?$/i.test(text)){sleep();return}
+  awake=true;busy=true;clearTimeout(sleepTimer);
+  $('send').disabled=true;$('heard').textContent='\u201C'+text+'\u201D';refreshFace();status('Thinking\u2026');
+  try{
+    let result=null;
+    try{result=localCommand(text)}catch(e){result={error:e.message}}
+    if(result&&result.error){status(result.error,true);$('reply').textContent=result.error;return}
+    if(!result)result=smallTalk(text);
+    if(!result){
+      try{result=await askGemini(text)}
+      catch(e){
+        if(![429,500,502,503,504].includes(e.code))throw e;
+        log('All Gemini models busy: '+e.message);
+        result={reply:'My cloud brain is overloaded right now — give me a minute. I can still move: try \u201Cforward 3\u201D.',calls:[]};
+      }
+    }
+    if(result.calls.length){
+      if(!writer)throw new Error('I\u2019m not connected. Connect your ESP32 before moving.');
+      for(const c of result.calls)await sendCommand(c.name,c.amount);
+      result.reply='Sent: '+result.calls.map(c=>c.name+' '+c.amount).join(', ')+'.';
+    }
+    $('reply').textContent=result.reply;status(listening?'Listening for commands':'Ready');
+    speak(result.reply);
+  }catch(e){
+    $('reply').textContent=e.message;status('Command not completed',true);log(e.message);
+  }finally{
+    busy=false;$('send').disabled=false;refreshFace();bumpSleep();
+  }
+}
+ $('composer').onsubmit=e=>{e.preventDefault();if(busy)return;
+  const text=$('message').value.trim();
+  if(text){$('message').value='';handleCommand(text)}};
+
+/* ================= microphone (browser STT) ================= */
+function onFinal(raw){
+  if(busy||speaking)return;
+  const text=raw.toLowerCase().trim();
+  $('heard').textContent='\u201C'+raw+'\u201D';
+  const words=settings.wake.split(',').map(w=>w.trim().toLowerCase()).filter(Boolean);
+  const hit=words.find(w=>text.includes(w));
+  if(!awake){if(!hit)return;wake()}
+  const cmd=hit?text.replace(hit,'').replace(/^[,\s]+/,'').trim():text;
+  if(cmd.length>1)handleCommand(cmd);else bumpSleep();
+}
+async function ensureMic(){
+  if(micStream&&micStream.getAudioTracks().some(t=>t.readyState==='live'))return true;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return true;
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+    micStream.getAudioTracks().forEach(t=>t.onended=()=>{micStream=null});
+    return true;
+  }catch(e){
+    status(e.name==='NotFoundError'?'No microphone found. You can still type.':'Microphone access denied. Allow it in browser settings.',true);
+    return false;
+  }
+}
+function releaseMic(){if(micStream)micStream.getTracks().forEach(t=>t.stop());micStream=null}
+function stopListening(){
+  listening=false;clearTimeout(restartTimer);
+  const current=rec;rec=null;if(current)current.abort();
+  releaseMic();
+  $('listenText').textContent='Start listening';$('start').classList.remove('live');
+  refreshFace();status('Microphone off');
+}
+function startRec(r){
+  lastStart=Date.now();
+  try{r.start()}
+  catch(e){if(e.name!=='InvalidStateError'){stopListening();status('Could not start microphone. You can still type.',true)}}
+}
+ $('start').onclick=async()=>{
+  if(listening){stopListening();return}
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){status('Voice input needs Chrome or Edge. You can still type.',true);return}
+  status('Starting microphone\u2026');
+  if(!(await ensureMic()))return;
+  const r=new SR();
+  r.continuous=true;r.interimResults=false;r.lang='en-US';
+  r.onresult=e=>{restarts=0;for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)onFinal(e.results[i][0].transcript)};
+  r.onstart=()=>{if(rec!==r)return;$('listenText').textContent='Stop listening';$('start').classList.add('live');
+    status(awake?'Listening for commands':'Listening for a wake phrase');refreshFace()};
+  r.onend=()=>{
+    if(!listening||rec!==r)return;
+    if(Date.now()-lastStart>5000)restarts=0;
+    restarts++;
+    if(restarts>5){stopListening();status('Microphone keeps stopping. Tap Start listening to try again.',true);return}
+    restartTimer=setTimeout(()=>{if(listening&&rec===r)startRec(r)},Math.min(300*restarts,2000));
+  };
+  r.onerror=e=>{
+    if(['not-allowed','service-not-allowed','audio-capture','network'].includes(e.error)){
+      stopListening();
+      status(({network:'Voice service unavailable. You can still type.','audio-capture':'No microphone found. You can still type.'})[e.error]
+        ||(location.protocol==='file:'?'Chrome blocks saved mic permission for files opened from disk. Open it via a local server (see tip) or allow again.':'Microphone access denied. Allow it in browser settings.'),true);
+    }else if(e.error!=='no-speech'&&e.error!=='aborted')status('Voice error: '+e.error,true);
+  };
+  rec=r;listening=true;restarts=0;
+  $('listenText').textContent='Stop listening';$('start').classList.add('live');refreshFace();
+  startRec(r);
+};
+
+/* ================= init ================= */
+rebuildMatchers();renderPad();renderChat();syncSettings();updateDevice();
+if(location.protocol==='file:')setTimeout(()=>status('Tip: Chrome re-asks for mic access on files opened from disk. Run \u201Cpython -m http.server\u201D in this folder and open http://localhost:8000 to allow it once.'),800);
+window.addEventListener('pagehide',()=>{stopListening();stopAudio();disconnect()});
+</script>
+</body>
+</html>
